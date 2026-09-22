@@ -4,14 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Simulador de Exames Offline - Admissão</title>
-
-    <!-- PWA: manifest e metadados de instalação -->
     <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#1e3a8a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Simulador">
     <link rel="apple-touch-icon" href="./icons/icon-192.png">
 
-    <!-- Incluindo a biblioteca jsPDF para exportação de PDF 100% offline -->
+    <!-- Biblioteca jsPDF para exportação 100% offline -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
     <style>
         :root {
             --primary: #1e3a8a;
@@ -24,6 +27,8 @@
             --success: #16a34a;
             --danger: #dc2626;
             --warning: #ca8a04;
+            --subject-fisica: #2563eb;
+            --subject-matematica: #16a34a;
         }
 
         body.dark-mode {
@@ -37,7 +42,25 @@
             --success: #22c55e;
             --danger: #ef4444;
             --warning: #eab308;
+            --subject-fisica: #60a5fa;
+            --subject-matematica: #4ade80;
         }
+
+        /* Estilos de realce colorido de texto (highlight) */
+        .hl {
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+        .hl-1 { background: #dbeafe; color: #1e40af; }
+        .hl-2 { background: #dcfce7; color: #166534; }
+        .hl-3 { background: #fef3c7; color: #92400e; }
+        .hl-4 { background: #fae8ff; color: #86198f; }
+
+        body.dark-mode .hl-1 { background: rgba(30, 58, 138, 0.45); color: #93c5fd; }
+        body.dark-mode .hl-2 { background: rgba(20, 83, 45, 0.45); color: #86efac; }
+        body.dark-mode .hl-3 { background: rgba(120, 53, 15, 0.45); color: #fde047; }
+        body.dark-mode .hl-4 { background: rgba(112, 26, 117, 0.45); color: #f0abfc; }
 
         * {
             box-sizing: border-box;
@@ -57,7 +80,7 @@
             padding: 20px;
         }
 
-        /* Fraction CSS Styles */
+        /* Formatação de frações matemáticas */
         .frac {
             display: inline-flex;
             flex-direction: column;
@@ -247,6 +270,9 @@
             cursor: pointer;
             transition: all 0.15s;
         }
+
+        .saved-exam-item.subject-fisica { border-left: 4px solid var(--subject-fisica); }
+        .saved-exam-item.subject-matematica { border-left: 4px solid var(--subject-matematica); }
 
         .saved-exam-item:hover {
             opacity: 0.9;
@@ -498,6 +524,42 @@
 
         .resolution-toggle-btn:hover { opacity: 0.9; }
 
+        .exp-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0 8px 0;
+            max-width: 440px;
+        }
+
+        @media (max-width: 500px) {
+            .exp-tabs {
+                max-width: 100%;
+            }
+        }
+
+        .exp-panel .explanation-grid {
+            display: grid;
+            margin-top: 0;
+        }
+
+        .exp-panel .explanation-flow {
+            display: block;
+            margin-top: 0;
+        }
+
+        .exp-panel[id^="exp-panel-explicacao"],
+        .exp-panel[id^="exp-panel-truques"] {
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            color: var(--text-main);
+            white-space: pre-line;
+            line-height: 1.6;
+        }
+
         .explanation-grid {
             display: none;
             grid-template-columns: 1fr 1fr 1fr;
@@ -701,12 +763,35 @@
             from { transform: translateX(100%); opacity: 0; }
             to { transform: translateX(0); opacity: 1; }
         }
+
+        #pwa-update-banner {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--card-bg);
+            color: var(--text-main);
+            padding: 12px 18px;
+            border-radius: 8px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+            z-index: 9998;
+            align-items: center;
+            gap: 12px;
+            border: 1px solid var(--accent);
+            font-size: 0.9rem;
+            animation: slideIn 0.3s ease-out;
+        }
     </style>
 </head>
 <body>
     <div id="custom-alert"></div>
 
-    <!-- Custom Modal for Resume / Timeout Confirmation -->
+    <div id="pwa-update-banner">
+        <span>🚀 <strong>Nova versão disponível!</strong></span>
+        <button class="btn-sm btn-success" onclick="applyPwaUpdate()" style="padding: 6px 14px; font-size: 0.8rem;">Atualizar Agora</button>
+    </div>
+
+    <!-- Modal para confirmação de retomada ou término de tempo -->
     <div id="custom-modal-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
         <div style="background:var(--card-bg); color:var(--text-main); padding:25px; border-radius:10px; max-width:400px; width:90%; box-shadow:0 10px 25px rgba(0,0,0,0.2); text-align:center;">
             <h3 id="modal-title" style="margin-bottom:10px; color:var(--primary);">Aviso</h3>
@@ -718,7 +803,7 @@
         </div>
     </div>
 
-    <!-- Hamburger Navigation Drawer -->
+    <!-- Gaveta do Menu Lateral -->
     <div class="drawer-overlay" id="drawerOverlay" onclick="toggleMenu()"></div>
     <div class="hamburger-drawer" id="hamburgerDrawer">
         <div class="drawer-header">
@@ -758,7 +843,7 @@
                 <button class="btn-sm" id="togglePasteBtn" onclick="togglePasteArea()" style="background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-main); width: 100%; padding: 8px;">Colar JSON Diretamente</button>
             </div>
             <div id="pasteAreaContainer" style="display: none; margin-top: 10px;">
-                <textarea id="jsonPasteInput" rows="6" style="width: 100%; padding: 10px; font-family: monospace; font-size: 0.8rem; background: var(--bg-color); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 6px; resize: vertical;" placeholder="Cola aqui o conteúdo do JSON do exame (ex: { &quot;matematica&quot;: ... } ou [ ... ])"></textarea>
+                <textarea id="jsonPasteInput" rows="6" style="width: 100%; padding: 10px; font-family: monospace; font-size: 0.8rem; background: var(--bg-color); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 6px; resize: vertical;" placeholder="Cola aqui o conteúdo do JSON do exame"></textarea>
                 <div style="display: flex; gap: 8px; margin-top: 8px;">
                     <button class="btn-sm btn-primary" onclick="importPastedJson()" style="flex: 1;">Importar JSON</button>
                     <button class="btn-sm" onclick="togglePasteArea()" style="background: var(--border-color); color: var(--text-main);">Cancelar</button>
@@ -797,6 +882,11 @@
 
         <div class="drawer-section">
             <h4>Exames Guardados</h4>
+            <div class="preference-toggle-group" style="margin-bottom: 10px;">
+                <button class="pref-btn" id="filter-saved-todos" onclick="setSavedExamsFilter('todos')">Todos</button>
+                <button class="pref-btn" id="filter-saved-fisica" onclick="setSavedExamsFilter('fisica')">Física</button>
+                <button class="pref-btn" id="filter-saved-matematica" onclick="setSavedExamsFilter('matematica')">Matemática</button>
+            </div>
             <div id="saved-exams-container">
                 <p style="font-size: 0.85rem; color: #64748b;">Nenhum exame guardado localmente.</p>
             </div>
@@ -808,6 +898,14 @@
                 <p style="font-size: 0.85rem; color: #64748b;">Nenhum histórico registado.</p>
             </div>
             <button class="btn-sm btn-delete" onclick="clearHistory()" style="margin-top: 8px; width: 100%; display: none;" id="btn-clear-history">Limpar Histórico</button>
+        </div>
+
+        <div class="drawer-section">
+            <h4>Aplicação & Atualizações</h4>
+            <div style="font-size: 0.82rem; color: #64748b; margin-bottom: 8px;">
+                Versão Instalada: <strong style="color: var(--primary);">v2.0 (PWA Offline)</strong>
+            </div>
+            <button class="btn-sm btn-primary" onclick="checkForPwaUpdate()" style="width: 100%; padding: 8px;">Verificar Atualizações</button>
         </div>
     </div>
 
@@ -833,7 +931,7 @@
 
                 <label for="year" style="font-weight: 600; margin-left: 10px;">Ano:</label>
                 <select id="year">
-                    <!-- Dynamic -->
+                    <!-- Dinâmico -->
                 </select>
             </div>
             <div class="control-group">
@@ -863,7 +961,8 @@
                         correct: 2,
                         dados: "f(x) = #3/2#x + #5/4#\nx = 2",
                         formula: "f(2) = (#3/2#)·(2) + #5/4#",
-                        resolucao: "Substituindo x por 2:\nf(2) = #6/2# + #5/4# = 3 + #5/4# = #12/4# + #5/4# = #17/4#."
+                        resolucao: "Substituindo x por 2:\nf(2) = (#3/2#)·(2) + #5/4#\nf(2) = #6/2# + #5/4#\nf(2) = 3 + #5/4#\nf(2) = #12/4# + #5/4#\nf(2) = #17/4#.",
+                        truques: "Dica Rápida: Em f(x) = #3/2#x + #5/4#, ao substituir x = 2, o numerador 2 cancela diretamente o denominador 2, resultando logo em 3 + #5/4# = #17/4# sem necessidade de MMC inicial."
                     },
                     {
                         id: "1.1",
@@ -874,7 +973,8 @@
                         correct: 1,
                         dados: "f(2) = #17/4#\na = #3/2#\nx = 2",
                         formula: "f(x) = ax + b ⇒ #17/4# = (#3/2#)(2) + b",
-                        resolucao: "#17/4# = 3 + b ⇒ b = #17/4# - #12/4# = #5/4#.\nLogo, a alternativa correta é B."
+                        resolucao: "Substituindo os valores conhecidos na função:\n#17/4# = (#3/2#)·(2) + b\n#17/4# = 3 + b\nb = #17/4# - 3\nb = #17/4# - #12/4#\nb = #5/4#.\nLogo, a alternativa correta é B.",
+                        truques: "Hack de Isolamento: Como f(2) = 3 + b e queremos #17/4# (que é 4,25), b = 4,25 - 3 = 1,25 = #5/4#."
                     },
                     {
                         id: "1.2",
@@ -885,7 +985,7 @@
                         correct: 2,
                         dados: "L(x) = #17/4#\nL(x) = #3/2#x + #5/4#",
                         formula: "#3/2#x + #5/4# = #17/4#",
-                        resolucao: "#3/2#x = #12/4# = 3 ⇒ 3x = 6 ⇒ x = 2.\nLogo, a alternativa correta é C."
+                        resolucao: "Igualando a expressão ao lucro pretendido:\n#3/2#x + #5/4# = #17/4#\n#3/2#x = #17/4# - #5/4#\n#3/2#x = #12/4#\n#3/2#x = 3\n3x = 3 · 2\n3x = 6\nx = 6 / 3\nx = 2.\nLogo, a alternativa correta é C."
                     }
                 ]
             },
@@ -899,7 +999,8 @@
                         correct: 2,
                         dados: "F = 20 N\nm = #1/2# kg",
                         formula: "F = m · a",
-                        resolucao: "a = F / m = 20 / (#1/2#) = 20 · 2 = 40 m/s²."
+                        resolucao: "Isolando a aceleração na Segunda Lei de Newton:\na = F / m\na = 20 / (#1/2#)\na = 20 · 2\na = 40 m/s².",
+                        truques: "Hack Mental: Dividir por #1/2# (ou 0,5) equivale a multiplicar por 2! Logo, 20 · 2 = 40 m/s² num segundo de cabeça."
                     }
                 ]
             }
@@ -919,6 +1020,8 @@
             resolutionStyle: localStorage.getItem('pref_resolution_style') || 'table'
         };
 
+        let savedExamsFilter = localStorage.getItem('pref_saved_exams_filter') || 'todos';
+
         let timerInterval = null;
         let totalSecondsRemaining = 0;
         let initialDurationSeconds = 0;
@@ -935,10 +1038,9 @@
             }
         }
 
-        // ---------- FRACTION & FORMATTING PARSER ----------
         function formatText(text) {
             if (!text) return '';
-            // Replaces #num/den# with true HTML fraction elements
+            text = text.replace(/\{\{([1-4]):([^}]+)\}\}/g, '<span class="hl hl-$1">$2</span>');
             return text.replace(/#([^#\/]+)\/([^#]+)#/g, '<span class="frac"><span class="num">$1</span><span class="den">$2</span></span>');
         }
 
@@ -946,7 +1048,6 @@
             if (!optString) return '';
             let trimmed = optString.trim();
             
-            // Garantir que a letra venha com parêntese "A)", "B)", etc.
             const match = trimmed.match(/^([A-Da-d])[\s:\-\.)]+(.*)$/);
             if (match) {
                 const letra = match[1].toUpperCase();
@@ -1082,7 +1183,7 @@
             clearInterval(timerInterval);
             updateTimerUI();
             playAlarmSound();
-            showTimeoutModal();
+            showCustomModal("Tempo Esgotado!", "O tempo regulamentar para a realização do exame terminou. Podes continuar a rever ou corrigir normalmente.", () => {}, null);
         }
 
         function playAlarmSound() {
@@ -1107,10 +1208,6 @@
             } catch (e) {
                 console.log("Áudio não suportado", e);
             }
-        }
-
-        function showTimeoutModal() {
-            showCustomModal("Tempo Esgotado!", "O tempo regulamentar para a realização do exame terminou. Podes continuar a rever ou corrigir normalmente.", () => {}, null);
         }
 
         function toggleMenu() {
@@ -1138,21 +1235,14 @@
                 const deltaX = touchEndX - touchStartX;
                 const deltaY = touchEndY - touchStartY;
 
-                // Check if horizontal movement is dominant
                 if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 60) {
                     const drawer = document.getElementById('hamburgerDrawer');
                     const isOpen = drawer.classList.contains('open');
 
-                    if (!isOpen) {
-                        // Swipe right starting near left edge (within 25px)
-                        if (touchStartX <= 25 && deltaX > 60) {
-                            toggleMenu();
-                        }
-                    } else {
-                        // Swipe left to close drawer
-                        if (deltaX < -60) {
-                            toggleMenu();
-                        }
+                    if (!isOpen && touchStartX <= 25 && deltaX > 60) {
+                        toggleMenu();
+                    } else if (isOpen && deltaX < -60) {
+                        toggleMenu();
                     }
                 }
             }
@@ -1192,6 +1282,25 @@
             document.getElementById('pref-opt-grid').classList.toggle('active', userPrefs.optionsLayout === 'grid');
             document.getElementById('pref-res-table').classList.toggle('active', userPrefs.resolutionStyle === 'table');
             document.getElementById('pref-res-flow').classList.toggle('active', userPrefs.resolutionStyle === 'flow');
+
+            const btnTodos = document.getElementById('filter-saved-todos');
+            const btnFisica = document.getElementById('filter-saved-fisica');
+            const btnMat = document.getElementById('filter-saved-matematica');
+            if (btnTodos) btnTodos.classList.toggle('active', savedExamsFilter === 'todos');
+            if (btnFisica) btnFisica.classList.toggle('active', savedExamsFilter === 'fisica');
+            if (btnMat) btnMat.classList.toggle('active', savedExamsFilter === 'matematica');
+        }
+
+        function setSavedExamsFilter(value) {
+            savedExamsFilter = value;
+            localStorage.setItem('pref_saved_exams_filter', value);
+            const btnTodos = document.getElementById('filter-saved-todos');
+            const btnFisica = document.getElementById('filter-saved-fisica');
+            const btnMat = document.getElementById('filter-saved-matematica');
+            if (btnTodos) btnTodos.classList.toggle('active', value === 'todos');
+            if (btnFisica) btnFisica.classList.toggle('active', value === 'fisica');
+            if (btnMat) btnMat.classList.toggle('active', value === 'matematica');
+            renderSavedExamsList();
         }
 
         function refreshExamDOMPreferences() {
@@ -1266,8 +1375,14 @@
                     return;
                 }
 
-                container.innerHTML = savedExams.map(item => 
-                    '<div class="saved-exam-item" onclick="selectAndLoadSavedExam(\'' + item.subject + '\', \'' + item.year + '\')">' +
+                const filteredExams = savedExamsFilter === 'todos' ? savedExams : savedExams.filter(item => item.subject.toLowerCase() === savedExamsFilter);
+                if (filteredExams.length === 0) {
+                    container.innerHTML = '<p style="font-size: 0.85rem; color: #64748b;">Nenhum exame guardado nesta disciplina.</p>';
+                    return;
+                }
+
+                container.innerHTML = filteredExams.map(item => 
+                    '<div class="saved-exam-item ' + (item.subject.toLowerCase() === 'fisica' ? 'subject-fisica' : 'subject-matematica') + '" onclick="selectAndLoadSavedExam(\'' + item.subject + '\', \'' + item.year + '\')">' +
                         '<div class="saved-exam-info">' +
                             '<strong>' + item.subject.toUpperCase() + '</strong> (' + item.year + ')' +
                             '<div style="font-size: 0.75rem; color: #64748b;">' + item.questions.length + ' questões</div>' +
@@ -1615,6 +1730,24 @@
             showAlert("Exame carregado com sucesso!");
         }
 
+        function switchExplanationTab(qIndex, tab, btn) {
+            const tabsContainer = document.getElementById('exp-tabs-' + qIndex);
+            if (tabsContainer) {
+                tabsContainer.querySelectorAll('.exp-tab-btn').forEach(b => b.classList.remove('active'));
+            }
+            if (btn) {
+                btn.classList.add('active');
+            } else if (window.event && window.event.currentTarget) {
+                window.event.currentTarget.classList.add('active');
+            }
+            const resPanel = document.getElementById('exp-panel-resolucao-' + qIndex);
+            const explPanel = document.getElementById('exp-panel-explicacao-' + qIndex);
+            const truqPanel = document.getElementById('exp-panel-truques-' + qIndex);
+            if (resPanel) resPanel.style.display = tab === 'resolucao' ? '' : 'none';
+            if (explPanel) explPanel.style.display = tab === 'explicacao' ? '' : 'none';
+            if (truqPanel) truqPanel.style.display = tab === 'truques' ? '' : 'none';
+        }
+
         function renderExamContent() {
             const container = document.getElementById('exam-content');
             container.innerHTML = '';
@@ -1633,17 +1766,29 @@
                     imageHtml = '<div class="question-image-container"><img src="' + q.image + '" alt="Figura da Questão"></div>';
                 }
 
-                let resolutionBlock = '';
+                let explanationInner = '';
                 if (userPrefs.resolutionStyle === 'flow') {
                     const flowText = 'Dados:\n' + q.dados + '\n\nFórmula:\n' + q.formula + '\n\nResolução:\n' + q.resolucao;
-                    resolutionBlock = '<div class="explanation-flow" id="exp-' + qIndex + '">' + formatText(flowText) + '</div>';
+                    explanationInner = '<div class="explanation-flow">' + formatText(flowText) + '</div>';
                 } else {
-                    resolutionBlock = '<div class="explanation-grid" id="exp-' + qIndex + '">' +
+                    explanationInner = '<div class="explanation-grid">' +
                         '<div class="col-box"><h4>[DADOS]</h4><p>' + formatText(q.dados) + '</p></div>' +
                         '<div class="col-box"><h4>[FÓRMULA]</h4><p>' + formatText(q.formula) + '</p></div>' +
                         '<div class="col-box"><h4>[RESOLUÇÃO / EXPLICAÇÃO]</h4><p>' + formatText(q.resolucao) + '</p></div>' +
                     '</div>';
                 }
+
+                const resolutionBlock = 
+                    '<div id="exp-' + qIndex + '" style="display:none;">' +
+                        '<div class="exp-tabs" id="exp-tabs-' + qIndex + '">' +
+                            '<button class="pref-btn exp-tab-btn active" onclick="switchExplanationTab(' + qIndex + ', \'resolucao\', this)">Resolução</button>' +
+                            '<button class="pref-btn exp-tab-btn" onclick="switchExplanationTab(' + qIndex + ', \'explicacao\', this)">Explicação</button>' +
+                            '<button class="pref-btn exp-tab-btn" onclick="switchExplanationTab(' + qIndex + ', \'truques\', this)">Truques/Hacks</button>' +
+                        '</div>' +
+                        '<div class="exp-panel" id="exp-panel-resolucao-' + qIndex + '">' + explanationInner + '</div>' +
+                        '<div class="exp-panel" id="exp-panel-explicacao-' + qIndex + '" style="display:none;"><p>' + formatText(q.explicacao || 'Explicação passo-a-passo ainda não disponível para esta questão.') + '</p></div>' +
+                        '<div class="exp-panel" id="exp-panel-truques-' + qIndex + '" style="display:none;"><p>' + formatText(q.truques || 'Sem truques disponíveis para esta questão.') + '</p></div>' +
+                    '</div>';
 
                 const variationBadgeHtml = q.variacao_de ? '<span class="variation-badge">Variação da ' + q.variacao_de + '</span>' : '';
 
@@ -1762,13 +1907,12 @@
         function toggleResolution(qIndex) {
             const expBlock = document.getElementById('exp-' + qIndex);
             const btn = expBlock.previousElementSibling;
-            const displayType = userPrefs.resolutionStyle === 'flow' ? 'block' : 'grid';
 
-            if (expBlock.style.display === displayType) {
+            if (expBlock.style.display === 'block') {
                 expBlock.style.display = 'none';
                 btn.textContent = 'Ver Resolução';
             } else {
-                expBlock.style.display = displayType;
+                expBlock.style.display = 'block';
                 btn.textContent = 'Ocultar Resolução';
             }
         }
@@ -1789,7 +1933,6 @@
                 const userChoice = userAnswers[qIndex];
                 const expBlock = document.getElementById('exp-' + qIndex);
                 const btn = expBlock ? expBlock.previousElementSibling : null;
-                const displayType = userPrefs.resolutionStyle === 'flow' ? 'block' : 'grid';
                 
                 card.classList.remove('correct-item', 'wrong-item');
 
@@ -1812,8 +1955,8 @@
                         const correctBubble = document.getElementById('bubble-' + qIndex + '-' + q.correct);
                         if (correctBubble) correctBubble.classList.add('correct-bubble');
                         
-                        if (expBlock && expBlock.style.display !== displayType) {
-                            expBlock.style.display = displayType;
+                        if (expBlock && expBlock.style.display !== 'block') {
+                            expBlock.style.display = 'block';
                             if (btn) btn.textContent = 'Ocultar Resolução';
                         }
                     }
@@ -1822,8 +1965,8 @@
                     const correctBubble = document.getElementById('bubble-' + qIndex + '-' + q.correct);
                     if (correctBubble) correctBubble.classList.add('correct-bubble');
                     
-                    if (expBlock && expBlock.style.display !== displayType) {
-                        expBlock.style.display = displayType;
+                    if (expBlock && expBlock.style.display !== 'block') {
+                        expBlock.style.display = 'block';
                         if (btn) btn.textContent = 'Ocultar Resolução';
                     }
                 }
@@ -1891,7 +2034,8 @@
                     respondida: respondida,
                     dados: q.dados || '',
                     formula: q.formula || '',
-                    resolucao: q.resolucao || ''
+                    resolucao: q.resolucao || '',
+                    truques: q.truques || ''
                 };
             });
 
@@ -1928,6 +2072,7 @@
                     lines.push("  Dados: " + q.dados);
                     lines.push("  Fórmula: " + q.formula);
                     lines.push("  Resolução: " + q.resolucao);
+                    if (q.truques) lines.push("  Truques/Hacks: " + q.truques);
                 }
                 lines.push("");
             });
@@ -1974,7 +2119,7 @@
 
             lastReportData.questoes.forEach((q) => {
                 if (!q.acertou) {
-                    if (y > 250) {
+                    if (y > 240) {
                         doc.addPage();
                         y = 20;
                     }
@@ -2009,7 +2154,12 @@
                     if (q.resolucao) {
                         const splitRes = doc.splitTextToSize("Resolução: " + q.resolucao, 170);
                         doc.text(splitRes, 20, y);
-                        y += splitRes.length * 4.5 + 6;
+                        y += splitRes.length * 4.5 + 2;
+                    }
+                    if (q.truques) {
+                        const splitTruques = doc.splitTextToSize("Truques/Hacks: " + q.truques, 170);
+                        doc.text(splitTruques, 20, y);
+                        y += splitTruques.length * 4.5 + 4;
                     } else {
                         y += 4;
                     }
@@ -2068,22 +2218,83 @@
             updateSubjects();
             initDropzone();
             updatePreferenceUI();
-            renderSavedExamsList();
+            setSavedExamsFilter(savedExamsFilter);
             renderPerformanceHistory();
+            registerServiceWorker();
         };
-    </script>
-    <!-- PWA: registo do Service Worker -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./service-worker.js')
+
+        let pwaRegistration = null;
+        let pendingWorker = null;
+
+        function registerServiceWorker() {
+            if ('serviceWorker' in navigator) {
+                if (window.location.protocol !== 'http:' && window.location.protocol !== 'https:') {
+                    console.info('[PWA] Service Worker requer servidor web HTTP/HTTPS. Execução direta em modo ficheiro local ativa.');
+                    return;
+                }
+
+                navigator.serviceWorker.register('./service-worker.js', { scope: './' })
                     .then((reg) => {
-                        console.log('Service Worker registado com sucesso. Scope:', reg.scope);
+                        pwaRegistration = reg;
+                        console.log('[PWA] Service Worker registado com sucesso. Âmbito:', reg.scope);
+
+                        // Se já houver um worker em espera, apresenta o botão de atualização imediatamente
+                        if (reg.waiting) {
+                            showUpdateBanner(reg.waiting);
+                        }
+
+                        reg.onupdatefound = () => {
+                            const installingWorker = reg.installing;
+                            if (installingWorker) {
+                                installingWorker.onstatechange = () => {
+                                    if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                        showUpdateBanner(installingWorker);
+                                    }
+                                };
+                            }
+                        };
                     })
                     .catch((err) => {
-                        console.error('Falha ao registar o Service Worker:', err);
+                        console.warn('[PWA] Registo do Service Worker ignorado ou não suportado neste ambiente:', err);
                     });
-            });
+
+                // Recarrega a página de forma fluida assim que o novo Service Worker toma o controlo
+                let refreshing = false;
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (!refreshing) {
+                        refreshing = true;
+                        window.location.reload();
+                    }
+                });
+            }
+        }
+
+        function showUpdateBanner(worker) {
+            pendingWorker = worker;
+            const banner = document.getElementById('pwa-update-banner');
+            if (banner) banner.style.display = 'flex';
+        }
+
+        function applyPwaUpdate() {
+            if (pendingWorker) {
+                pendingWorker.postMessage({ action: 'skipWaiting' });
+            } else if (pwaRegistration && pwaRegistration.waiting) {
+                pwaRegistration.waiting.postMessage({ action: 'skipWaiting' });
+            } else {
+                window.location.reload();
+            }
+        }
+
+        function checkForPwaUpdate() {
+            if (pwaRegistration) {
+                pwaRegistration.update().then(() => {
+                    showAlert('Verificação concluída. Se houver nova versão, surgirá o botão de atualização.');
+                }).catch(() => {
+                    showAlert('Sem ligação à rede para verificar novas versões.');
+                });
+            } else {
+                showAlert('A correr como ficheiro local. Atualizações automáticas requerem HTTP/HTTPS.');
+            }
         }
     </script>
 </body>
