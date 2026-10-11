@@ -46,22 +46,6 @@
             --subject-matematica: #4ade80;
         }
 
-        /* Estilos de realce colorido de texto (highlight) */
-        .hl {
-            padding: 1px 5px;
-            border-radius: 4px;
-            font-weight: 600;
-        }
-        .hl-1 { background: #dbeafe; color: #1e40af; }
-        .hl-2 { background: #dcfce7; color: #166534; }
-        .hl-3 { background: #fef3c7; color: #92400e; }
-        .hl-4 { background: #fae8ff; color: #86198f; }
-
-        body.dark-mode .hl-1 { background: rgba(30, 58, 138, 0.45); color: #93c5fd; }
-        body.dark-mode .hl-2 { background: rgba(20, 83, 45, 0.45); color: #86efac; }
-        body.dark-mode .hl-3 { background: rgba(120, 53, 15, 0.45); color: #fde047; }
-        body.dark-mode .hl-4 { background: rgba(112, 26, 117, 0.45); color: #f0abfc; }
-
         * {
             box-sizing: border-box;
             margin: 0;
@@ -526,10 +510,9 @@
 
         .exp-tabs {
             display: flex;
-            flex-wrap: wrap;
             gap: 8px;
             margin: 10px 0 8px 0;
-            max-width: 440px;
+            max-width: 320px;
         }
 
         @media (max-width: 500px) {
@@ -548,7 +531,6 @@
             margin-top: 0;
         }
 
-        .exp-panel[id^="exp-panel-explicacao"],
         .exp-panel[id^="exp-panel-truques"] {
             background: var(--bg-color);
             border: 1px solid var(--border-color);
@@ -763,33 +745,10 @@
             from { transform: translateX(100%); opacity: 0; }
             to { transform: translateX(0); opacity: 1; }
         }
-
-        #pwa-update-banner {
-            display: none;
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: var(--card-bg);
-            color: var(--text-main);
-            padding: 12px 18px;
-            border-radius: 8px;
-            box-shadow: 0 6px 20px rgba(0,0,0,0.25);
-            z-index: 9998;
-            align-items: center;
-            gap: 12px;
-            border: 1px solid var(--accent);
-            font-size: 0.9rem;
-            animation: slideIn 0.3s ease-out;
-        }
     </style>
 </head>
 <body>
     <div id="custom-alert"></div>
-
-    <div id="pwa-update-banner">
-        <span>🚀 <strong>Nova versão disponível!</strong></span>
-        <button class="btn-sm btn-success" onclick="applyPwaUpdate()" style="padding: 6px 14px; font-size: 0.8rem;">Atualizar Agora</button>
-    </div>
 
     <!-- Modal para confirmação de retomada ou término de tempo -->
     <div id="custom-modal-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
@@ -899,14 +858,6 @@
             </div>
             <button class="btn-sm btn-delete" onclick="clearHistory()" style="margin-top: 8px; width: 100%; display: none;" id="btn-clear-history">Limpar Histórico</button>
         </div>
-
-        <div class="drawer-section">
-            <h4>Aplicação & Atualizações</h4>
-            <div style="font-size: 0.82rem; color: #64748b; margin-bottom: 8px;">
-                Versão Instalada: <strong style="color: var(--primary);">v2.0 (PWA Offline)</strong>
-            </div>
-            <button class="btn-sm btn-primary" onclick="checkForPwaUpdate()" style="width: 100%; padding: 8px;">Verificar Atualizações</button>
-        </div>
     </div>
 
     <div class="container">
@@ -961,7 +912,7 @@
                         correct: 2,
                         dados: "f(x) = #3/2#x + #5/4#\nx = 2",
                         formula: "f(2) = (#3/2#)·(2) + #5/4#",
-                        resolucao: "Substituindo x por 2:\nf(2) = (#3/2#)·(2) + #5/4#\nf(2) = #6/2# + #5/4#\nf(2) = 3 + #5/4#\nf(2) = #12/4# + #5/4#\nf(2) = #17/4#.",
+                        resolucao: "Substituindo x por 2:\nf(2) = #6/2# + #5/4# = 3 + #5/4# = #12/4# + #5/4# = #17/4#.",
                         truques: "Dica Rápida: Em f(x) = #3/2#x + #5/4#, ao substituir x = 2, o numerador 2 cancela diretamente o denominador 2, resultando logo em 3 + #5/4# = #17/4# sem necessidade de MMC inicial."
                     },
                     {
@@ -973,7 +924,7 @@
                         correct: 1,
                         dados: "f(2) = #17/4#\na = #3/2#\nx = 2",
                         formula: "f(x) = ax + b ⇒ #17/4# = (#3/2#)(2) + b",
-                        resolucao: "Substituindo os valores conhecidos na função:\n#17/4# = (#3/2#)·(2) + b\n#17/4# = 3 + b\nb = #17/4# - 3\nb = #17/4# - #12/4#\nb = #5/4#.\nLogo, a alternativa correta é B.",
+                        resolucao: "#17/4# = 3 + b ⇒ b = #17/4# - #12/4# = #5/4#.\nLogo, a alternativa correta é B.",
                         truques: "Hack de Isolamento: Como f(2) = 3 + b e queremos #17/4# (que é 4,25), b = 4,25 - 3 = 1,25 = #5/4#."
                     },
                     {
@@ -985,7 +936,7 @@
                         correct: 2,
                         dados: "L(x) = #17/4#\nL(x) = #3/2#x + #5/4#",
                         formula: "#3/2#x + #5/4# = #17/4#",
-                        resolucao: "Igualando a expressão ao lucro pretendido:\n#3/2#x + #5/4# = #17/4#\n#3/2#x = #17/4# - #5/4#\n#3/2#x = #12/4#\n#3/2#x = 3\n3x = 3 · 2\n3x = 6\nx = 6 / 3\nx = 2.\nLogo, a alternativa correta é C."
+                        resolucao: "#3/2#x = #12/4# = 3 ⇒ 3x = 6 ⇒ x = 2.\nLogo, a alternativa correta é C."
                     }
                 ]
             },
@@ -999,7 +950,7 @@
                         correct: 2,
                         dados: "F = 20 N\nm = #1/2# kg",
                         formula: "F = m · a",
-                        resolucao: "Isolando a aceleração na Segunda Lei de Newton:\na = F / m\na = 20 / (#1/2#)\na = 20 · 2\na = 40 m/s².",
+                        resolucao: "a = F / m = 20 / (#1/2#) = 20 · 2 = 40 m/s².",
                         truques: "Hack Mental: Dividir por #1/2# (ou 0,5) equivale a multiplicar por 2! Logo, 20 · 2 = 40 m/s² num segundo de cabeça."
                     }
                 ]
@@ -1040,7 +991,6 @@
 
         function formatText(text) {
             if (!text) return '';
-            text = text.replace(/\{\{([1-4]):([^}]+)\}\}/g, '<span class="hl hl-$1">$2</span>');
             return text.replace(/#([^#\/]+)\/([^#]+)#/g, '<span class="frac"><span class="num">$1</span><span class="den">$2</span></span>');
         }
 
@@ -1730,20 +1680,16 @@
             showAlert("Exame carregado com sucesso!");
         }
 
-        function switchExplanationTab(qIndex, tab, btn) {
+        function switchExplanationTab(qIndex, tab) {
             const tabsContainer = document.getElementById('exp-tabs-' + qIndex);
             if (tabsContainer) {
-                tabsContainer.querySelectorAll('.exp-tab-btn').forEach(b => b.classList.remove('active'));
+                tabsContainer.querySelectorAll('.exp-tab-btn').forEach(btn => btn.classList.remove('active'));
             }
-            if (btn) {
-                btn.classList.add('active');
-            } else if (window.event && window.event.currentTarget) {
-                window.event.currentTarget.classList.add('active');
+            if (event && event.currentTarget) {
+                event.currentTarget.classList.add('active');
             }
-            const resPanel = document.getElementById('exp-panel-resolucao-' + qIndex);
             const explPanel = document.getElementById('exp-panel-explicacao-' + qIndex);
             const truqPanel = document.getElementById('exp-panel-truques-' + qIndex);
-            if (resPanel) resPanel.style.display = tab === 'resolucao' ? '' : 'none';
             if (explPanel) explPanel.style.display = tab === 'explicacao' ? '' : 'none';
             if (truqPanel) truqPanel.style.display = tab === 'truques' ? '' : 'none';
         }
@@ -1781,13 +1727,13 @@
                 const resolutionBlock = 
                     '<div id="exp-' + qIndex + '" style="display:none;">' +
                         '<div class="exp-tabs" id="exp-tabs-' + qIndex + '">' +
-                            '<button class="pref-btn exp-tab-btn active" onclick="switchExplanationTab(' + qIndex + ', \'resolucao\', this)">Resolução</button>' +
-                            '<button class="pref-btn exp-tab-btn" onclick="switchExplanationTab(' + qIndex + ', \'explicacao\', this)">Explicação</button>' +
-                            '<button class="pref-btn exp-tab-btn" onclick="switchExplanationTab(' + qIndex + ', \'truques\', this)">Truques/Hacks</button>' +
+                            '<button class="pref-btn exp-tab-btn active" onclick="switchExplanationTab(' + qIndex + ', \'explicacao\')">Explicação</button>' +
+                            '<button class="pref-btn exp-tab-btn" onclick="switchExplanationTab(' + qIndex + ', \'truques\')">Truques/Hacks</button>' +
                         '</div>' +
-                        '<div class="exp-panel" id="exp-panel-resolucao-' + qIndex + '">' + explanationInner + '</div>' +
-                        '<div class="exp-panel" id="exp-panel-explicacao-' + qIndex + '" style="display:none;"><p>' + formatText(q.explicacao || 'Explicação passo-a-passo ainda não disponível para esta questão.') + '</p></div>' +
-                        '<div class="exp-panel" id="exp-panel-truques-' + qIndex + '" style="display:none;"><p>' + formatText(q.truques || 'Sem truques disponíveis para esta questão.') + '</p></div>' +
+                        '<div class="exp-panel" id="exp-panel-explicacao-' + qIndex + '">' + explanationInner + '</div>' +
+                        '<div class="exp-panel" id="exp-panel-truques-' + qIndex + '" style="display:none;">' +
+                            '<p>' + formatText(q.truques || 'Sem truques disponíveis para esta questão.') + '</p>' +
+                        '</div>' +
                     '</div>';
 
                 const variationBadgeHtml = q.variacao_de ? '<span class="variation-badge">Variação da ' + q.variacao_de + '</span>' : '';
@@ -1907,12 +1853,13 @@
         function toggleResolution(qIndex) {
             const expBlock = document.getElementById('exp-' + qIndex);
             const btn = expBlock.previousElementSibling;
+            const displayType = userPrefs.resolutionStyle === 'flow' ? 'block' : 'grid';
 
-            if (expBlock.style.display === 'block') {
+            if (expBlock.style.display === displayType) {
                 expBlock.style.display = 'none';
                 btn.textContent = 'Ver Resolução';
             } else {
-                expBlock.style.display = 'block';
+                expBlock.style.display = displayType;
                 btn.textContent = 'Ocultar Resolução';
             }
         }
@@ -1933,6 +1880,7 @@
                 const userChoice = userAnswers[qIndex];
                 const expBlock = document.getElementById('exp-' + qIndex);
                 const btn = expBlock ? expBlock.previousElementSibling : null;
+                const displayType = userPrefs.resolutionStyle === 'flow' ? 'block' : 'grid';
                 
                 card.classList.remove('correct-item', 'wrong-item');
 
@@ -1955,8 +1903,8 @@
                         const correctBubble = document.getElementById('bubble-' + qIndex + '-' + q.correct);
                         if (correctBubble) correctBubble.classList.add('correct-bubble');
                         
-                        if (expBlock && expBlock.style.display !== 'block') {
-                            expBlock.style.display = 'block';
+                        if (expBlock && expBlock.style.display !== displayType) {
+                            expBlock.style.display = displayType;
                             if (btn) btn.textContent = 'Ocultar Resolução';
                         }
                     }
@@ -1965,8 +1913,8 @@
                     const correctBubble = document.getElementById('bubble-' + qIndex + '-' + q.correct);
                     if (correctBubble) correctBubble.classList.add('correct-bubble');
                     
-                    if (expBlock && expBlock.style.display !== 'block') {
-                        expBlock.style.display = 'block';
+                    if (expBlock && expBlock.style.display !== displayType) {
+                        expBlock.style.display = displayType;
                         if (btn) btn.textContent = 'Ocultar Resolução';
                     }
                 }
@@ -2223,9 +2171,6 @@
             registerServiceWorker();
         };
 
-        let pwaRegistration = null;
-        let pendingWorker = null;
-
         function registerServiceWorker() {
             if ('serviceWorker' in navigator) {
                 if (window.location.protocol !== 'http:' && window.location.protocol !== 'https:') {
@@ -2235,20 +2180,14 @@
 
                 navigator.serviceWorker.register('./service-worker.js', { scope: './' })
                     .then((reg) => {
-                        pwaRegistration = reg;
                         console.log('[PWA] Service Worker registado com sucesso. Âmbito:', reg.scope);
-
-                        // Se já houver um worker em espera, apresenta o botão de atualização imediatamente
-                        if (reg.waiting) {
-                            showUpdateBanner(reg.waiting);
-                        }
 
                         reg.onupdatefound = () => {
                             const installingWorker = reg.installing;
                             if (installingWorker) {
                                 installingWorker.onstatechange = () => {
                                     if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                        showUpdateBanner(installingWorker);
+                                        showAlert('Nova versão do simulador disponível! Atualize a página.');
                                     }
                                 };
                             }
@@ -2257,43 +2196,6 @@
                     .catch((err) => {
                         console.warn('[PWA] Registo do Service Worker ignorado ou não suportado neste ambiente:', err);
                     });
-
-                // Recarrega a página de forma fluida assim que o novo Service Worker toma o controlo
-                let refreshing = false;
-                navigator.serviceWorker.addEventListener('controllerchange', () => {
-                    if (!refreshing) {
-                        refreshing = true;
-                        window.location.reload();
-                    }
-                });
-            }
-        }
-
-        function showUpdateBanner(worker) {
-            pendingWorker = worker;
-            const banner = document.getElementById('pwa-update-banner');
-            if (banner) banner.style.display = 'flex';
-        }
-
-        function applyPwaUpdate() {
-            if (pendingWorker) {
-                pendingWorker.postMessage({ action: 'skipWaiting' });
-            } else if (pwaRegistration && pwaRegistration.waiting) {
-                pwaRegistration.waiting.postMessage({ action: 'skipWaiting' });
-            } else {
-                window.location.reload();
-            }
-        }
-
-        function checkForPwaUpdate() {
-            if (pwaRegistration) {
-                pwaRegistration.update().then(() => {
-                    showAlert('Verificação concluída. Se houver nova versão, surgirá o botão de atualização.');
-                }).catch(() => {
-                    showAlert('Sem ligação à rede para verificar novas versões.');
-                });
-            } else {
-                showAlert('A correr como ficheiro local. Atualizações automáticas requerem HTTP/HTTPS.');
             }
         }
     </script>
