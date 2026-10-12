@@ -3,7 +3,7 @@
 // Sempre que alterares ficheiros do app, incrementa a versão do CACHE_NAME
 // (ex: 'v1' -> 'v2') para forçar a atualização da cache nos dispositivos dos utilizadores.
 
-const CACHE_NAME = 'simulador-exames-v1';
+const CACHE_NAME = 'simulador-exames-v2';
 
 // Recursos do próprio site (caminhos relativos ao service-worker.js)
 const APP_SHELL = [
