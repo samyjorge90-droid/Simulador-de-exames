@@ -3,7 +3,7 @@
 // Sempre que alterares ficheiros do app, incrementa a versão do CACHE_NAME
 // (ex: 'v1' -> 'v2') para forçar a atualização da cache nos dispositivos dos utilizadores.
 
-const CACHE_NAME = 'simulador-exames-v2';
+const CACHE_NAME = 'simulador-exames-v3';
 
 // Recursos do próprio site (caminhos relativos ao service-worker.js)
 const APP_SHELL = [
@@ -44,6 +44,13 @@ self.addEventListener('install', (event) => {
       );
     })
   );
+});
+
+// Permite que o botão "Atualizar" da página ative já a nova versão
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.action === 'skipWaiting') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('activate', (event) => {
