@@ -904,6 +904,27 @@
         </div>
 
         <div class="drawer-section">
+            <h4>Progresso</h4>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; margin-bottom: 10px; cursor: pointer;">
+                <input type="checkbox" id="export-all-check" onchange="onExportAllToggle()" style="width: 18px; height: 18px;">
+                Exportar todos os exames
+            </label>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn-sm btn-primary" onclick="openProgressExport()" style="flex: 1; padding: 8px;">Exportar progresso</button>
+                <button class="btn-sm" onclick="openProgressImport()" style="flex: 1; padding: 8px; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-main);">Importar progresso</button>
+            </div>
+            <div id="progress-box-container" style="display: none; margin-top: 10px;">
+                <textarea id="progress-box" spellcheck="false" style="display: block; width: 100%; height: 100px; resize: none; overflow-y: auto; padding: 8px; font-family: monospace; font-size: 0.75rem; background: var(--bg-color); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 6px;"></textarea>
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                    <button class="btn-sm btn-success" id="progress-copy-btn" onclick="copyProgressCode()" style="flex: 1; display: none;">Copiar</button>
+                    <button class="btn-sm btn-primary" id="progress-apply-btn" onclick="applyProgressCode()" style="flex: 1; display: none;">Aplicar</button>
+                    <button class="btn-sm" onclick="closeProgressBox()" style="background: var(--border-color); color: var(--text-main);">Fechar</button>
+                </div>
+                <div class="dropzone-status" id="progress-status"></div>
+            </div>
+        </div>
+
+        <div class="drawer-section">
             <h4>Preferências de Exibição</h4>
             
             <div class="preference-group">
@@ -932,7 +953,10 @@
         </div>
 
         <div class="drawer-section">
-            <h4>Exames Guardados</h4>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                <h4 style="margin: 0;">Exames Guardados</h4>
+                <button id="btn-delete-all-exams" onclick="confirmDeleteAllExams()" title="Eliminar todos os exames guardados" aria-label="Eliminar todos os exames guardados" style="display: inline-flex; align-items: center; justify-content: center; padding: 7px 11px; background: #1e293b; border: 1px solid #334155; border-radius: 10px; color: #ef4444; cursor: pointer;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
+            </div>
             <div class="preference-toggle-group" style="margin-bottom: 10px;">
                 <button class="pref-btn" id="filter-saved-todos" onclick="setSavedExamsFilter('todos')">Todos</button>
                 <button class="pref-btn" id="filter-saved-fisica" onclick="setSavedExamsFilter('fisica')">Física</button>
@@ -1112,13 +1136,15 @@
             return formatText(trimmed);
         }
 
-        function showCustomModal(title, message, onYes, onNo) {
+        function showCustomModal(title, message, onYes, onNo, yesLabel, noLabel) {
             const overlay = document.getElementById('custom-modal-overlay');
             document.getElementById('modal-title').textContent = title;
             document.getElementById('modal-message').textContent = message;
             
             const btnYes = document.getElementById('modal-btn-yes');
             const btnNo = document.getElementById('modal-btn-no');
+            btnYes.textContent = yesLabel || 'Sim';
+            btnNo.textContent = noLabel || 'Não';
 
             btnYes.onclick = function() {
                 overlay.style.display = 'none';
@@ -1298,6 +1324,282 @@
                 }
             }
         }, { passive: true });
+
+
+        // ===== Eliminar todos os exames guardados =====
+        function confirmDeleteAllExams() {
+            showCustomModal(
+                "Eliminar exames",
+                "Tens a certeza que queres eliminar TODOS os exames guardados? As respostas em andamento e o histórico são mantidos.",
+                function() { deleteAllSavedExams(); },
+                function() {},
+                "Eliminar",
+                "Cancelar"
+            );
+        }
+
+        function deleteAllSavedExams() {
+            try {
+                const stored = localStorage.getItem('exames_guardados');
+                const savedExams = stored ? JSON.parse(stored) : [];
+                savedExams.forEach(function(e) {
+                    if (examsDatabase[e.subject] && examsDatabase[e.subject][e.year]) {
+                        delete examsDatabase[e.subject][e.year];
+                    }
+                });
+                localStorage.removeItem('exames_guardados');
+                updateSubjects();
+                renderSavedExamsList();
+                showAlert("Todos os exames guardados foram eliminados.");
+            } catch (e) {
+                console.error("Erro ao eliminar exames:", e);
+            }
+        }
+
+        // ===== Exportar / Importar progresso =====
+        const PROGRESS_PREFIX = 'progresso_';
+
+        function onExportAllToggle() {
+            const on = document.getElementById('export-all-check').checked;
+            safeLocalStorageSet('pref_export_all', on ? 'true' : 'false');
+        }
+
+        function initProgressUI() {
+            const chk = document.getElementById('export-all-check');
+            if (chk) chk.checked = localStorage.getItem('pref_export_all') === 'true';
+        }
+
+        function setProgressStatus(msg, type) {
+            const el = document.getElementById('progress-status');
+            el.textContent = msg || '';
+            el.className = 'dropzone-status' + (type ? ' ' + type : '');
+        }
+
+        function showProgressBox(mode, text) {
+            document.getElementById('progress-box-container').style.display = 'block';
+            const box = document.getElementById('progress-box');
+            box.value = text || '';
+            box.readOnly = (mode === 'export');
+            box.placeholder = mode === 'import' ? 'Cola aqui o código de progresso...' : '';
+            document.getElementById('progress-copy-btn').style.display = mode === 'export' ? 'block' : 'none';
+            document.getElementById('progress-apply-btn').style.display = mode === 'import' ? 'block' : 'none';
+            setProgressStatus('', '');
+        }
+
+        function closeProgressBox() {
+            document.getElementById('progress-box-container').style.display = 'none';
+            document.getElementById('progress-box').value = '';
+            setProgressStatus('', '');
+        }
+
+        function readStoredProgress(subject, year) {
+            try {
+                const raw = localStorage.getItem(PROGRESS_PREFIX + subject + '_' + year);
+                const obj = raw ? JSON.parse(raw) : {};
+                return (obj && typeof obj === 'object') ? obj : {};
+            } catch (e) {
+                return {};
+            }
+        }
+
+        function openProgressExport() {
+            const all = document.getElementById('export-all-check').checked;
+            const exames = [];
+
+            if (all) {
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (!key || key.indexOf(PROGRESS_PREFIX) !== 0) continue;
+                    const rest = key.slice(PROGRESS_PREFIX.length);
+                    const cut = rest.lastIndexOf('_');
+                    if (cut <= 0) continue;
+                    const d = rest.slice(0, cut);
+                    const a = rest.slice(cut + 1);
+                    const r = readStoredProgress(d, a);
+                    if (Object.keys(r).length > 0) exames.push({ d: d, a: a, r: r });
+                }
+                if (exames.length === 0) {
+                    showAlert("Não há progresso para exportar.");
+                    return;
+                }
+            } else {
+                if (!currentSubject || !currentYear) {
+                    showAlert("Abre um exame primeiro, ou marca 'Exportar todos os exames'.");
+                    return;
+                }
+                const r = readStoredProgress(currentSubject, currentYear);
+                if (Object.keys(r).length === 0) {
+                    showAlert("Ainda não respondeste nada neste exame.");
+                    return;
+                }
+                exames.push({ d: currentSubject, a: currentYear, r: r });
+            }
+
+            const payload = { app: 'simulador-exames', v: 1, data: new Date().toISOString(), exames: exames };
+            const total = exames.reduce(function(n, e) { return n + Object.keys(e.r).length; }, 0);
+            showProgressBox('export', JSON.stringify(payload));
+            setProgressStatus(exames.length + ' exame(s), ' + total + ' resposta(s). Copia o código.', 'ok');
+        }
+
+        function openProgressImport() {
+            showProgressBox('import', '');
+            document.getElementById('progress-box').focus();
+        }
+
+        function copyProgressCode() {
+            const box = document.getElementById('progress-box');
+            const done = function() { setProgressStatus('Código copiado!', 'ok'); };
+            const fallback = function() {
+                box.focus();
+                box.select();
+                try { document.execCommand('copy'); done(); }
+                catch (e) { setProgressStatus('Não foi possível copiar. Seleciona o texto e copia manualmente.', 'err'); }
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(box.value).then(done, fallback);
+            } else {
+                fallback();
+            }
+        }
+
+        function examLabel(d, a) {
+            return String(d).charAt(0).toUpperCase() + String(d).slice(1) + ' ' + a;
+        }
+
+        function parseProgressCode(text) {
+            text = (text || '').trim();
+            if (!text) return { error: 'A caixa está vazia.' };
+
+            let payload;
+            try {
+                payload = JSON.parse(text);
+            } catch (e) {
+                return { error: 'Código inválido ou cortado. Copia o código completo e tenta de novo.' };
+            }
+            if (!payload || payload.app !== 'simulador-exames' || !Array.isArray(payload.exames)) {
+                return { error: 'Este código não é de progresso do Simulador de Exames.' };
+            }
+
+            // JSON.parse ignora chaves repetidas em silêncio; detetamos no texto original
+            const re = /"r"\s*:\s*\{([^{}]*)\}/g;
+            let m, n = 0;
+            while ((m = re.exec(text)) !== null) {
+                const seen = {};
+                const kre = /"([^"]*)"\s*:/g;
+                let k;
+                while ((k = kre.exec(m[1])) !== null) {
+                    if (seen[k[1]]) {
+                        const ex = payload.exames[n];
+                        const where = ex ? ' (' + examLabel(ex.d, ex.a) + ')' : '';
+                        return { error: 'A questão na posição ' + (parseInt(k[1], 10) + 1) + ' aparece repetida no código' + where + '. Nada foi aplicado.' };
+                    }
+                    seen[k[1]] = true;
+                }
+                n++;
+            }
+
+            const entries = [];
+            const missing = [];
+            for (let i = 0; i < payload.exames.length; i++) {
+                const e = payload.exames[i];
+                if (!e || typeof e.d !== 'string' || typeof e.a !== 'string' || !e.r || typeof e.r !== 'object' || Array.isArray(e.r)) {
+                    return { error: 'O código tem um exame mal formado. Nada foi aplicado.' };
+                }
+                const exam = examsDatabase[e.d] && examsDatabase[e.d][e.a];
+                if (!exam) { missing.push(examLabel(e.d, e.a)); continue; }
+
+                const clean = {};
+                const keys = Object.keys(e.r);
+                for (let j = 0; j < keys.length; j++) {
+                    const key = keys[j];
+                    const val = e.r[key];
+                    const qi = Number(key);
+                    if (!/^\d+$/.test(key) || qi >= exam.length) {
+                        return { error: 'Questão inexistente (' + key + ') em ' + examLabel(e.d, e.a) + '. Nada foi aplicado.' };
+                    }
+                    if (!Number.isInteger(val) || val < 0 || val >= exam[qi].options.length) {
+                        return { error: 'Alternativa inválida na questão ' + exam[qi].id + ' de ' + examLabel(e.d, e.a) + '. Nada foi aplicado.' };
+                    }
+                    clean[key] = val;
+                }
+                entries.push({ d: e.d, a: e.a, r: clean });
+            }
+            return { entries: entries, missing: missing, date: payload.data };
+        }
+
+        function applyProgressCode() {
+            const res = parseProgressCode(document.getElementById('progress-box').value);
+            if (res.error) { setProgressStatus(res.error, 'err'); return; }
+
+            const missingMsg = res.missing.length
+                ? ' Ignorado(s) por não existirem neste aparelho: ' + res.missing.join(', ') + '.'
+                : '';
+
+            if (res.entries.length === 0) {
+                setProgressStatus('Nenhum dos exames do código está carregado neste aparelho.' + missingMsg, 'err');
+                return;
+            }
+
+            // procurar conflitos com o que já existe
+            const conflictLines = [];
+            let conflictCount = 0;
+            res.entries.forEach(function(en) {
+                const existing = readStoredProgress(en.d, en.a);
+                const exam = examsDatabase[en.d][en.a];
+                const ids = [];
+                Object.keys(en.r).forEach(function(k) {
+                    if (existing[k] !== undefined && existing[k] !== en.r[k]) ids.push(exam[Number(k)].id);
+                });
+                if (ids.length) {
+                    conflictCount += ids.length;
+                    conflictLines.push(examLabel(en.d, en.a) + ': ' + ids.slice(0, 8).join(', ') + (ids.length > 8 ? '…' : ''));
+                }
+            });
+
+            const run = function(useImported) {
+                const r = doApplyProgress(res.entries, useImported);
+                setProgressStatus(r + missingMsg, 'ok');
+            };
+
+            if (conflictCount > 0) {
+                showCustomModal(
+                    "Respostas diferentes",
+                    conflictCount + " questão(ões) têm uma resposta diferente da que já tens (" + conflictLines.join(' | ') + "). Usar as importadas ou manter as tuas? As questões novas são adicionadas nos dois casos.",
+                    function() { run(true); },
+                    function() { run(false); },
+                    "Usar importadas",
+                    "Manter as minhas"
+                );
+            } else {
+                run(true);
+            }
+        }
+
+        function doApplyProgress(entries, useImported) {
+            let added = 0, replaced = 0, kept = 0;
+            let reopen = null;
+
+            entries.forEach(function(en) {
+                const existing = readStoredProgress(en.d, en.a);
+                const merged = Object.assign({}, existing);
+                Object.keys(en.r).forEach(function(k) {
+                    if (existing[k] === undefined) { merged[k] = en.r[k]; added++; }
+                    else if (existing[k] !== en.r[k]) {
+                        if (useImported) { merged[k] = en.r[k]; replaced++; } else { kept++; }
+                    }
+                });
+                safeLocalStorageSet(PROGRESS_PREFIX + en.d + '_' + en.a, JSON.stringify(merged));
+                if (en.d === currentSubject && en.a === currentYear && currentExamData) reopen = merged;
+            });
+
+            if (reopen) executeLoadExam(currentSubject, currentYear, reopen);
+
+            const msg = 'Progresso aplicado: ' + added + ' nova(s)' +
+                (replaced ? ', ' + replaced + ' substituída(s)' : '') +
+                (kept ? ', ' + kept + ' mantida(s)' : '') + '.';
+            showAlert(msg);
+            return msg;
+        }
 
         function togglePasteArea() {
             const container = document.getElementById('pasteAreaContainer');
@@ -2446,6 +2748,7 @@
                 document.body.classList.add('dark-mode');
             }
             loadSavedExamsFromStorage();
+            initProgressUI();
             updateSubjects();
             initDropzone();
             updatePreferenceUI();
