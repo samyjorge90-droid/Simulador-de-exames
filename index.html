@@ -1098,10 +1098,10 @@
         let savedExamsFilter = localStorage.getItem('pref_saved_exams_filter') || 'todos';
 
         let timerInterval = null;
-        let totalSecondsRemaining = 0;
-        let initialDurationSeconds = 0;
-        let isTimerRunning = false;
-        let isTimerPaused = false;
+        let examFinalTime = null;
+        const TEMPO_PREFIX = 'tempo_';
+        const ULTIMA_PREFIX = 'ultima_';
+        const T = { key: null, dur: 0, base: 0, runStart: 0, running: false, alarmado: false, autoPaused: false, autoPausedAt: 0, ticks: 0, lastTick: 0 };
 
         function safeLocalStorageSet(key, value) {
             try {
@@ -1164,16 +1164,112 @@
             overlay.style.display = 'flex';
         }
 
-        function startTimer(minutes) {
-            clearInterval(timerInterval);
-            totalSecondsRemaining = minutes * 60;
-            initialDurationSeconds = totalSecondsRemaining;
-            isTimerRunning = true;
-            isTimerPaused = false;
-            
-            runTimerLoop();
+        // ===== Temporizador por exame (tempo real, com contagem negativa) =====
+        function pad2(n) { return String(n).padStart(2, '0'); }
+
+        function fmtClock(sec) {
+            const neg = sec < 0;
+            const a = Math.abs(Math.floor(sec));
+            return (neg ? '-' : '') + pad2(Math.floor(a / 60)) + ':' + pad2(a % 60);
+        }
+
+        function fmtHuman(sec) {
+            sec = Math.max(0, Math.round(sec));
+            const h = Math.floor(sec / 3600);
+            const m = Math.floor((sec % 3600) / 60);
+            if (h > 0) return h + 'h' + pad2(m);
+            if (m > 0) return m + 'min';
+            return sec + 's';
+        }
+
+        function currentExamKey() {
+            return (currentSubject && currentYear) ? currentSubject + '_' + currentYear : null;
+        }
+
+        function readStoredTime(subject, year) {
+            try {
+                const raw = localStorage.getItem(TEMPO_PREFIX + subject + '_' + year);
+                if (!raw) return null;
+                const o = JSON.parse(raw);
+                if (!o || !(o.dur > 0)) return null;
+                return { dur: o.dur, spent: Math.max(0, o.spent || 0), alarmado: !!o.alarmado };
+            } catch (e) { return null; }
+        }
+
+        function timerSpent() {
+            return T.base + (T.running ? (Date.now() - T.runStart) / 1000 : 0);
+        }
+
+        function timerPersist() {
+            if (!T.key || T.dur <= 0) return;
+            safeLocalStorageSet(TEMPO_PREFIX + T.key, JSON.stringify({ dur: T.dur, spent: Math.floor(timerSpent()), alarmado: T.alarmado }));
+        }
+
+        function timerPauseAt(ms) {
+            if (!T.running) return;
+            T.base += Math.max(0, (ms - T.runStart) / 1000);
+            T.running = false;
+            timerPersist();
             updateTimerUI();
-            showAlert(`Temporizador iniciado para ${minutes} minutos.`);
+        }
+
+        function timerResume() {
+            if (T.dur <= 0 || T.running) return;
+            T.running = true;
+            T.runStart = Date.now();
+            T.lastTick = Date.now();
+            T.autoPaused = false;
+            updateTimerUI();
+        }
+
+        function timerDetach() {
+            timerPauseAt(Date.now());
+            timerPersist();
+            T.key = null; T.dur = 0; T.base = 0; T.running = false; T.alarmado = false; T.autoPaused = false;
+            updateTimerUI();
+        }
+
+        function timerLoadFor(subject, year) {
+            timerDetach();
+            const st = readStoredTime(subject, year);
+            T.key = subject + '_' + year;
+            if (st) { T.dur = st.dur; T.base = st.spent; T.alarmado = st.alarmado; }
+            updateTimerUI();
+        }
+
+        function discardExamProgress(subject, year) {
+            if (T.key === subject + '_' + year) timerDetach();
+            localStorage.removeItem('progresso_' + subject + '_' + year);
+            localStorage.removeItem(TEMPO_PREFIX + subject + '_' + year);
+            localStorage.removeItem(ULTIMA_PREFIX + subject + '_' + year);
+        }
+
+        function startTimer(minutes) {
+            const key = currentExamKey();
+            if (!key || !currentExamData) {
+                showAlert('Abre um exame primeiro. O temporizador é de cada exame.');
+                return;
+            }
+            const begin = function() {
+                T.key = key;
+                T.dur = minutes * 60;
+                T.base = 0;
+                T.running = false;
+                T.alarmado = false;
+                T.autoPaused = false;
+                timerPersist();
+                timerResume();
+                showAlert('Temporizador iniciado: ' + minutes + ' min.');
+            };
+            if (T.key === key && T.dur > 0 && timerSpent() > 0) {
+                showCustomModal(
+                    'Substituir temporizador',
+                    'Este exame já tem ' + fmtHuman(timerSpent()) + ' gastos de ' + fmtHuman(T.dur) + '. Começar de novo com ' + minutes + ' min?',
+                    begin, function() {}, 'Substituir', 'Cancelar'
+                );
+            } else {
+                begin();
+            }
         }
 
         function startCustomTimer() {
@@ -1186,66 +1282,126 @@
             startTimer(mins);
         }
 
-        function runTimerLoop() {
-            clearInterval(timerInterval);
-            timerInterval = setInterval(() => {
-                if (!isTimerPaused && isTimerRunning) {
-                    if (totalSecondsRemaining > 0) {
-                        totalSecondsRemaining--;
-                        updateTimerUI();
-                        if (totalSecondsRemaining === 0) {
-                            onTimerFinished();
-                        }
-                    }
-                }
-            }, 1000);
-        }
-
         function togglePauseTimer() {
-            if (!isTimerRunning) return;
-            isTimerPaused = !isTimerPaused;
-            updateTimerUI();
-            showAlert(isTimerPaused ? 'Temporizador pausado.' : 'Temporizador retomado.');
+            if (T.dur <= 0) return;
+            if (T.running) {
+                timerPauseAt(Date.now());
+                T.autoPaused = false;
+                showAlert('Temporizador pausado.');
+            } else {
+                timerResume();
+                showAlert('Temporizador retomado.');
+            }
         }
 
         function restartTimer() {
-            if (initialDurationSeconds <= 0) {
+            if (T.dur <= 0) {
                 showAlert('Nenhum temporizador ativo para reiniciar.');
                 return;
             }
-            clearInterval(timerInterval);
-            totalSecondsRemaining = initialDurationSeconds;
-            isTimerRunning = true;
-            isTimerPaused = false;
-            runTimerLoop();
+            showCustomModal(
+                'Reiniciar temporizador',
+                'O tempo gasto (' + fmtHuman(timerSpent()) + ') será zerado. Continuar?',
+                function() {
+                    T.base = 0; T.running = false; T.alarmado = false;
+                    timerPersist();
+                    timerResume();
+                    showAlert('Temporizador reiniciado.');
+                },
+                function() {}, 'Reiniciar', 'Cancelar'
+            );
+        }
+
+        function timerAutoPause(atMs) {
+            if (!T.running) return;
+            const at = atMs || Date.now();
+            timerPauseAt(at);
+            T.autoPaused = true;
+            T.autoPausedAt = at;
+        }
+
+        function timerOnReturn() {
+            if (!T.autoPaused) return;
+            T.autoPaused = false;
+            const away = (Date.now() - T.autoPausedAt) / 1000;
+            if (away < 30) {
+                timerResume();
+            } else {
+                showCustomModal(
+                    'Temporizador pausado',
+                    'O relógio foi pausado quando saíste (' + fmtHuman(away) + ' fora). Retomar a contar?',
+                    function() { timerResume(); },
+                    function() {},
+                    'Retomar', 'Continuar pausado'
+                );
+            }
+        }
+
+        function timerTick() {
+            if (!T.running) return;
+            const now = Date.now();
+            const gap = now - T.lastTick;
+            T.lastTick = now;
+            if (gap > 5000) {
+                // o aparelho "adormeceu": não contar o tempo em que esteve parado
+                timerAutoPause(now - gap);
+                timerOnReturn();
+                return;
+            }
+            T.ticks++;
+            if (T.dur > 0 && timerSpent() > T.dur && !T.alarmado) {
+                T.alarmado = true;
+                timerPersist();
+                playAlarmSound();
+                showCustomModal('Tempo esgotado!', 'O tempo previsto terminou. O relógio continua a contar em negativo, para saberes quanto passaste do limite.', function() {}, null);
+            }
+            if (T.ticks % 5 === 0) timerPersist();
             updateTimerUI();
-            showAlert('Temporizador reiniciado.');
+        }
+
+        function initTimer() {
+            clearInterval(timerInterval);
+            timerInterval = setInterval(timerTick, 1000);
+            document.addEventListener('visibilitychange', function() {
+                if (document.hidden) { timerAutoPause(); timerPersist(); }
+                else { timerOnReturn(); }
+            });
+            window.addEventListener('blur', function() { timerAutoPause(); });
+            window.addEventListener('focus', function() { timerOnReturn(); });
+            window.addEventListener('pagehide', function() { timerAutoPause(); timerPersist(); });
         }
 
         function updateTimerUI() {
             const headerWidget = document.getElementById('header-timer-widget');
             const headerDisplay = document.getElementById('header-timer-display');
             const headerPauseBtn = document.getElementById('header-pause-btn');
-            
             const drawerStatus = document.getElementById('drawer-timer-status');
             const drawerPauseBtn = document.getElementById('drawer-pause-btn');
             const drawerResetBtn = document.getElementById('drawer-reset-btn');
 
-            if (isTimerRunning) {
+            const active = T.dur > 0 && T.key && T.key === currentExamKey() && currentExamData;
+
+            if (active) {
+                const remaining = T.dur - Math.floor(timerSpent());
+                const over = remaining < 0;
+                const formatted = fmtClock(remaining);
+
                 headerWidget.style.display = 'inline-flex';
+                headerWidget.style.background = over ? '#dc2626' : 'rgba(255,255,255,0.2)';
                 drawerPauseBtn.style.display = 'block';
                 drawerResetBtn.style.display = 'block';
-                
-                const mins = Math.floor(totalSecondsRemaining / 60);
-                const secs = totalSecondsRemaining % 60;
-                const formatted = String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
-                
-                headerDisplay.textContent = formatted;
-                headerPauseBtn.textContent = isTimerPaused ? 'Retomar' : 'Pausar';
-                
-                drawerStatus.textContent = isTimerPaused ? 'Pausado (' + formatted + ')' : 'Restante: ' + formatted;
-                drawerStatus.style.color = isTimerPaused ? 'var(--warning)' : 'var(--success)';
-                drawerPauseBtn.textContent = isTimerPaused ? 'Retomar' : 'Pausar';
+
+                headerDisplay.textContent = formatted + (T.running ? '' : ' ⏸');
+                headerPauseBtn.textContent = T.running ? 'Pausar' : 'Retomar';
+                drawerPauseBtn.textContent = T.running ? 'Pausar' : 'Retomar';
+
+                if (!T.running) {
+                    drawerStatus.textContent = 'Pausado (' + formatted + ')';
+                    drawerStatus.style.color = 'var(--warning)';
+                } else {
+                    drawerStatus.textContent = (over ? 'Excedido: ' : 'Restante: ') + formatted;
+                    drawerStatus.style.color = over ? 'var(--danger)' : 'var(--success)';
+                }
             } else {
                 headerWidget.style.display = 'none';
                 drawerPauseBtn.style.display = 'none';
@@ -1255,12 +1411,27 @@
             }
         }
 
-        function onTimerFinished() {
-            isTimerRunning = false;
-            clearInterval(timerInterval);
-            updateTimerUI();
-            playAlarmSound();
-            showCustomModal("Tempo Esgotado!", "O tempo regulamentar para a realização do exame terminou. Podes continuar a rever ou corrigir normalmente.", () => {}, null);
+        function buildTempoLine(t) {
+            const diff = t.gasto_seg - t.previsto_min * 60;
+            const extra = diff > 0 ? '+' + fmtHuman(diff) + ' acima do limite' : 'dentro do limite (' + fmtHuman(-diff) + ' de folga)';
+            return 'Tempo previsto: ' + t.previsto_min + ' min | Tempo gasto: ' + t.gasto + ' (' + extra + ')';
+        }
+
+        function scrollToLastTouched(subject, year) {
+            const keys = Object.keys(userAnswers).map(Number).filter(function(n) { return !isNaN(n); });
+            if (keys.length === 0) return;
+            let idx = parseInt(localStorage.getItem(ULTIMA_PREFIX + subject + '_' + year), 10);
+            if (!(idx >= 0 && idx < currentExamData.length && userAnswers[idx] !== undefined)) {
+                idx = Math.max.apply(null, keys);
+            }
+            setTimeout(function() {
+                const el = document.getElementById('q-card-' + idx);
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 200);
+        }
+
+        function markTouched(qIndex) {
+            safeLocalStorageSet(ULTIMA_PREFIX + currentSubject + '_' + currentYear, String(qIndex));
         }
 
         function playAlarmSound() {
@@ -1402,21 +1573,45 @@
             }
         }
 
+        function readStoredUltima(d, a) {
+            const n = parseInt(localStorage.getItem(ULTIMA_PREFIX + d + '_' + a), 10);
+            return (Number.isInteger(n) && n >= 0) ? n : null;
+        }
+
+        function buildProgressEntry(d, a) {
+            const r = readStoredProgress(d, a);
+            const t = readStoredTime(d, a);
+            const u = readStoredUltima(d, a);
+            if (Object.keys(r).length === 0 && !t) return null;
+            const e = { d: d, a: a, r: r };
+            if (t) e.t = { dur: t.dur, spent: Math.floor(t.spent) };
+            if (u !== null && r[u] !== undefined) e.u = u;
+            return e;
+        }
+
         function openProgressExport() {
             const all = document.getElementById('export-all-check').checked;
-            const exames = [];
 
+            // pausa o relógio do exame aberto e grava o tempo exato
+            const wasRunning = T.running;
+            if (T.running) { timerPauseAt(Date.now()); T.autoPaused = false; }
+            timerPersist();
+
+            const exames = [];
             if (all) {
+                const seen = {};
                 for (let i = 0; i < localStorage.length; i++) {
                     const key = localStorage.key(i);
-                    if (!key || key.indexOf(PROGRESS_PREFIX) !== 0) continue;
-                    const rest = key.slice(PROGRESS_PREFIX.length);
+                    if (!key) continue;
+                    let rest = null;
+                    if (key.indexOf(PROGRESS_PREFIX) === 0) rest = key.slice(PROGRESS_PREFIX.length);
+                    else if (key.indexOf(TEMPO_PREFIX) === 0) rest = key.slice(TEMPO_PREFIX.length);
+                    if (!rest || seen[rest]) continue;
+                    seen[rest] = true;
                     const cut = rest.lastIndexOf('_');
                     if (cut <= 0) continue;
-                    const d = rest.slice(0, cut);
-                    const a = rest.slice(cut + 1);
-                    const r = readStoredProgress(d, a);
-                    if (Object.keys(r).length > 0) exames.push({ d: d, a: a, r: r });
+                    const e = buildProgressEntry(rest.slice(0, cut), rest.slice(cut + 1));
+                    if (e) exames.push(e);
                 }
                 if (exames.length === 0) {
                     showAlert("Não há progresso para exportar.");
@@ -1427,18 +1622,21 @@
                     showAlert("Abre um exame primeiro, ou marca 'Exportar todos os exames'.");
                     return;
                 }
-                const r = readStoredProgress(currentSubject, currentYear);
-                if (Object.keys(r).length === 0) {
-                    showAlert("Ainda não respondeste nada neste exame.");
+                const e = buildProgressEntry(currentSubject, currentYear);
+                if (!e) {
+                    showAlert("Ainda não respondeste nada nem iniciaste o temporizador neste exame.");
                     return;
                 }
-                exames.push({ d: currentSubject, a: currentYear, r: r });
+                exames.push(e);
             }
 
-            const payload = { app: 'simulador-exames', v: 1, data: new Date().toISOString(), exames: exames };
+            const payload = { app: 'simulador-exames', v: 2, data: new Date().toISOString(), exames: exames };
             const total = exames.reduce(function(n, e) { return n + Object.keys(e.r).length; }, 0);
+            const comTempo = exames.filter(function(e) { return e.t; }).length;
             showProgressBox('export', JSON.stringify(payload));
-            setProgressStatus(exames.length + ' exame(s), ' + total + ' resposta(s). Copia o código.', 'ok');
+            setProgressStatus(
+                exames.length + ' exame(s), ' + total + ' resposta(s)' + (comTempo ? ', ' + comTempo + ' com tempo' : '') + '.' +
+                (wasRunning ? ' Relógio pausado.' : '') + ' Copia o código.', 'ok');
         }
 
         function openProgressImport() {
@@ -1522,7 +1720,16 @@
                     }
                     clean[key] = val;
                 }
-                entries.push({ d: e.d, a: e.a, r: clean });
+                let t = null;
+                if (e.t !== undefined) {
+                    if (!e.t || typeof e.t !== 'object' || !Number.isFinite(e.t.dur) || e.t.dur <= 0 || e.t.dur > 1000000 ||
+                        !Number.isFinite(e.t.spent) || e.t.spent < 0 || e.t.spent > 10000000) {
+                        return { error: 'Tempo inválido em ' + examLabel(e.d, e.a) + '. Nada foi aplicado.' };
+                    }
+                    t = { dur: Math.round(e.t.dur), spent: Math.floor(e.t.spent) };
+                }
+                const u = (Number.isInteger(e.u) && e.u >= 0 && e.u < exam.length) ? e.u : null;
+                entries.push({ d: e.d, a: e.a, r: clean, t: t, u: u });
             }
             return { entries: entries, missing: missing, date: payload.data };
         }
@@ -1540,8 +1747,10 @@
                 return;
             }
 
-            // procurar conflitos com o que já existe
+            timerPersist(); // garante que o tempo em memória está gravado antes de comparar
+
             const conflictLines = [];
+            const timeLines = [];
             let conflictCount = 0;
             res.entries.forEach(function(en) {
                 const existing = readStoredProgress(en.d, en.a);
@@ -1554,32 +1763,55 @@
                     conflictCount += ids.length;
                     conflictLines.push(examLabel(en.d, en.a) + ': ' + ids.slice(0, 8).join(', ') + (ids.length > 8 ? '…' : ''));
                 }
+                if (en.t) {
+                    const et = readStoredTime(en.d, en.a);
+                    if (et && (et.dur !== en.t.dur || Math.floor(et.spent) !== en.t.spent)) {
+                        timeLines.push(examLabel(en.d, en.a) + ': aqui ' + fmtHuman(et.spent) + ' de ' + fmtHuman(et.dur) +
+                            ', importado ' + fmtHuman(en.t.spent) + ' de ' + fmtHuman(en.t.dur));
+                    }
+                }
             });
 
-            const run = function(useImported) {
-                const r = doApplyProgress(res.entries, useImported);
+            const run = function(useImported, useTime) {
+                const r = doApplyProgress(res.entries, useImported, useTime);
                 setProgressStatus(r + missingMsg, 'ok');
+            };
+
+            const askTime = function(useImported) {
+                if (timeLines.length > 0) {
+                    showCustomModal(
+                        "Tempo diferente",
+                        timeLines.join(' | ') + ". Usar o tempo importado?",
+                        function() { run(useImported, true); },
+                        function() { run(useImported, false); }
+                    );
+                } else {
+                    run(useImported, true);
+                }
             };
 
             if (conflictCount > 0) {
                 showCustomModal(
                     "Respostas diferentes",
                     conflictCount + " questão(ões) têm uma resposta diferente da que já tens (" + conflictLines.join(' | ') + "). Usar as importadas ou manter as tuas? As questões novas são adicionadas nos dois casos.",
-                    function() { run(true); },
-                    function() { run(false); },
+                    function() { askTime(true); },
+                    function() { askTime(false); },
                     "Usar importadas",
                     "Manter as minhas"
                 );
             } else {
-                run(true);
+                askTime(true);
             }
         }
 
-        function doApplyProgress(entries, useImported) {
-            let added = 0, replaced = 0, kept = 0;
+        function doApplyProgress(entries, useImported, useTime) {
+            let added = 0, replaced = 0, kept = 0, timesSet = 0;
             let reopen = null;
 
             entries.forEach(function(en) {
+                const isCurrent = (en.d === currentSubject && en.a === currentYear && currentExamData);
+                if (isCurrent) timerDetach(); // grava o estado atual e solta o relógio
+
                 const existing = readStoredProgress(en.d, en.a);
                 const merged = Object.assign({}, existing);
                 Object.keys(en.r).forEach(function(k) {
@@ -1589,14 +1821,28 @@
                     }
                 });
                 safeLocalStorageSet(PROGRESS_PREFIX + en.d + '_' + en.a, JSON.stringify(merged));
-                if (en.d === currentSubject && en.a === currentYear && currentExamData) reopen = merged;
+
+                if (en.t) {
+                    const et = readStoredTime(en.d, en.a);
+                    if (!et || useTime) {
+                        safeLocalStorageSet(TEMPO_PREFIX + en.d + '_' + en.a, JSON.stringify({ dur: en.t.dur, spent: en.t.spent, alarmado: en.t.spent > en.t.dur }));
+                        timesSet++;
+                    }
+                }
+
+                if (en.u !== null && (readStoredUltima(en.d, en.a) === null || useImported) && merged[en.u] !== undefined) {
+                    safeLocalStorageSet(ULTIMA_PREFIX + en.d + '_' + en.a, String(en.u));
+                }
+
+                if (isCurrent) reopen = merged;
             });
 
-            if (reopen) executeLoadExam(currentSubject, currentYear, reopen);
+            if (reopen) executeLoadExam(currentSubject, currentYear, reopen, false);
 
             const msg = 'Progresso aplicado: ' + added + ' nova(s)' +
                 (replaced ? ', ' + replaced + ' substituída(s)' : '') +
-                (kept ? ', ' + kept + ' mantida(s)' : '') + '.';
+                (kept ? ', ' + kept + ' mantida(s)' : '') +
+                (timesSet ? ', tempo de ' + timesSet + ' exame(s)' : '') + '.';
             showAlert(msg);
             return msg;
         }
@@ -2141,7 +2387,7 @@
                         executeLoadExam(subject, year, JSON.parse(savedProgress));
                     },
                     () => {
-                        localStorage.removeItem(progressKey);
+                        discardExamProgress(subject, year);
                         executeLoadExam(subject, year, {});
                     }
                 );
@@ -2150,12 +2396,14 @@
             }
         }
 
-        function executeLoadExam(subject, year, progressAnswers) {
+        function executeLoadExam(subject, year, progressAnswers, silentTimer) {
             currentExamData = examsDatabase[subject][year];
             currentSubject = subject;
             currentYear = year;
             userAnswers = progressAnswers || {};
             lastReportData = null;
+            examFinalTime = null;
+            timerLoadFor(subject, year);
             isErrorsOnlyMode = false;
             
             renderExamContent();
@@ -2188,6 +2436,18 @@
             });
 
             showAlert("Exame carregado com sucesso!");
+
+            if (Object.keys(userAnswers).length > 0) scrollToLastTouched(subject, year);
+
+            if (!silentTimer && T.dur > 0) {
+                showCustomModal(
+                    'Temporizador do exame',
+                    'Este exame tem temporizador: ' + fmtHuman(timerSpent()) + ' gastos de ' + fmtHuman(T.dur) + '. Retomar a contagem agora?',
+                    function() { timerResume(); showAlert('Temporizador retomado.'); },
+                    function() {},
+                    'Retomar agora', 'Depois'
+                );
+            }
         }
 
         function switchExplanationTab(qIndex, tab, btn) {
@@ -2310,6 +2570,7 @@
         function handleOptionSelect(qIndex, optIndex) {
             userAnswers[qIndex] = optIndex;
             safeLocalStorageSet('progresso_' + currentSubject + '_' + currentYear, JSON.stringify(userAnswers));
+            markTouched(qIndex);
             
             currentExamData[qIndex].options.forEach((_, i) => {
                 const lbl = document.getElementById('label-' + qIndex + '-' + i);
@@ -2337,6 +2598,7 @@
         function handleBubbleSelect(qIndex, optIndex) {
             userAnswers[qIndex] = optIndex;
             safeLocalStorageSet('progresso_' + currentSubject + '_' + currentYear, JSON.stringify(userAnswers));
+            markTouched(qIndex);
 
             const radioInput = document.querySelector('input[name="question_' + qIndex + '"][value="' + optIndex + '"]');
             if (radioInput) radioInput.checked = true;
@@ -2384,6 +2646,22 @@
             }
 
             localStorage.removeItem('progresso_' + currentSubject + '_' + currentYear);
+            localStorage.removeItem(ULTIMA_PREFIX + currentSubject + '_' + currentYear);
+
+            if (!examFinalTime && T.key === currentExamKey() && T.dur > 0) {
+                timerPauseAt(Date.now());
+                const spent = Math.floor(timerSpent());
+                examFinalTime = {
+                    previsto_min: Math.round(T.dur / 60),
+                    gasto_seg: spent,
+                    gasto: fmtHuman(spent),
+                    excedeu_seg: Math.max(0, spent - T.dur)
+                };
+            }
+            if (T.key === currentExamKey()) {
+                timerDetach();
+                localStorage.removeItem(TEMPO_PREFIX + currentSubject + '_' + currentYear);
+            }
 
             let score = 0;
             let total = currentExamData.length;
@@ -2504,6 +2782,7 @@
                 ano: currentYear,
                 data_realizacao: new Date().toISOString(),
                 pontuacao: { acertos: score, total: total, percentagem: percentage },
+                tempo: examFinalTime,
                 questoes: questoes
             };
 
@@ -2522,6 +2801,7 @@
             lines.push("Disciplina: " + report.disciplina + " | Ano do exame: " + report.ano);
             lines.push("Data: " + report.data_realizacao);
             lines.push("Pontuação: " + report.pontuacao.acertos + "/" + report.pontuacao.total + " (" + report.pontuacao.percentagem + "%)");
+            if (report.tempo) lines.push(buildTempoLine(report.tempo));
             lines.push("");
             report.questoes.forEach(q => {
                 lines.push("Questão " + q.id + ": " + (q.acertou ? "CORRETA" : (q.respondida ? "ERRADA" : "NÃO RESPONDIDA")));
@@ -2566,6 +2846,10 @@
             doc.text("Data: " + new Date(lastReportData.data_realizacao).toLocaleString('pt-PT'), 20, y);
             y += 6;
             doc.text("Pontuação: " + lastReportData.pontuacao.acertos + "/" + lastReportData.pontuacao.total + " (" + lastReportData.pontuacao.percentagem + "%)", 20, y);
+            if (lastReportData.tempo) {
+                y += 6;
+                doc.text(buildTempoLine(lastReportData.tempo), 20, y);
+            }
             y += 12;
             
             doc.setLineWidth(0.5);
@@ -2749,6 +3033,7 @@
             }
             loadSavedExamsFromStorage();
             initProgressUI();
+            initTimer();
             updateSubjects();
             initDropzone();
             updatePreferenceUI();
